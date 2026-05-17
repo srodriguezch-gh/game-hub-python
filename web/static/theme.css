@@ -1,0 +1,19 @@
+/* Game Hub theme overrides */
+
+body { font-family: 'Inter', sans-serif; }
+
+.text-\[10px\] { font-size: 11px; }
+
+.game-board td { width: 60px; height: 60px; text-align: center; font-size: 2rem; cursor: pointer; user-select: none; }
+.game-board td:hover { filter: brightness(0.95); }
+
+/* Mobile */
+@media (max-width: 640px) {
+    main { padding: 1rem 0.75rem !important; }
+    .grid { gap: 0.75rem !important; }
+    button, a, input, select, textarea { min-height: 44px; }
+    .game-board td { width: 44px; height: 44px; font-size: 1.5rem; }
+}
+@media (max-width: 375px) {
+    main { padding: 0.5rem !important; }
+}

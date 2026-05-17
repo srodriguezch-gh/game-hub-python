@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block title %}Simon Says — Game Hub{% endblock %}
+
+{% block content %}
+<div class="max-w-sm mx-auto text-center">
+    <div class="mb-4">
+        <div class="text-sm text-slate-500">Score: <span id="score" class="font-bold text-slate-800">0</span> &middot; Best: <span id="high-score" class="font-bold text-slate-800">0</span></div>
+        <div id="simon-status" class="text-sm font-semibold text-blue-600 mt-1">Press Start to Play</div>
+    </div>
+
+    <div id="simon-board" class="inline-grid grid-cols-2 gap-3 bg-slate-800 p-5 rounded-full shadow-lg">
+        <div id="simon-green" onclick="handleColorClick('green')" class="w-32 h-32 rounded-tl-full bg-emerald-500 opacity-40 cursor-pointer transition-all duration-100 border-4 border-slate-800"></div>
+        <div id="simon-red" onclick="handleColorClick('red')" class="w-32 h-32 rounded-tr-full bg-red-500 opacity-40 cursor-pointer transition-all duration-100 border-4 border-slate-800"></div>
+        <div id="simon-yellow" onclick="handleColorClick('yellow')" class="w-32 h-32 rounded-bl-full bg-yellow-400 opacity-40 cursor-pointer transition-all duration-100 border-4 border-slate-800"></div>
+        <div id="simon-blue" onclick="handleColorClick('blue')" class="w-32 h-32 rounded-br-full bg-blue-500 opacity-40 cursor-pointer transition-all duration-100 border-4 border-slate-800"></div>
+    </div>
+
+    <button id="simon-start" onclick="startSimon()" class="mt-6 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm">
+        <i class="fas fa-play mr-1"></i>Start Game
+    </button>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const COLORS = ['green', 'red', 'yellow', 'blue'];
+const TONES = { green: 261.63, red: 329.63, yellow: 392.0, blue: 523.25 };
+const COLOR_CSS = { green: '#10b981', red: '#ef4444', yellow: '#eab308', blue: '#3b82f6' };
+
+let sequence = [];
+let userSeq = [];
+let activeColor = null;
+let isShowing = false;
+let highScore = parseInt(localStorage.getItem('simonHighScore') || '0');
+let gameOver = false;
+
+document.getElementById('high-score').textContent = highScore;
+
+function playTone(color) {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.value = TONES[color];
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.3);
+    } catch(e) {}
+}
+
+function flash(color, duration = 300) {
+    const el = document.getElementById('simon-' + color);
+    el.style.opacity = '1';
+    playTone(color);
+    setTimeout(() => { el.style.opacity = '0.4'; }, duration);
+}
+
+async function showSequence() {
+    isShowing = true;
+    document.getElementById('simon-status').textContent = 'Watch Simon...';
+    for (let i = 0; i < sequence.length; i++) {
+        await new Promise(r => setTimeout(r, 500));
+        flash(sequence[i], 350);
+        await new Promise(r => setTimeout(r, 350));
+    }
+    isShowing = false;
+    document.getElementById('simon-status').textContent = 'Your turn!';
+    userSeq = [];
+}
+
+function startSimon() {
+    if (isShowing) return;
+    sequence = [];
+    userSeq = [];
+    gameOver = false;
+    document.getElementById('simon-status').textContent = 'Get ready...';
+    setTimeout(() => {
+        sequence.push(COLORS[Math.floor(Math.random() * 4)]);
+        showSequence();
+    }, 800);
+}
+
+function handleColorClick(color) {
+    if (isShowing || sequence.length === 0 || gameOver) return;
+
+    flash(color, 150);
+
+    userSeq.push(color);
+
+    if (color !== sequence[userSeq.length - 1]) {
+        document.getElementById('simon-status').textContent = 'Game Over!';
+        document.getElementById('simon-status').className = 'text-sm font-semibold text-red-600 mt-1';
+        if (sequence.length - 1 > highScore) {
+            highScore = sequence.length - 1;
+            localStorage.setItem('simonHighScore', highScore);
+            document.getElementById('high-score').textContent = highScore;
+        }
+        window.GameHub.playSound('lose');
+        gameOver = true;
+        return;
+    }
+
+    if (userSeq.length === sequence.length) {
+        const score = sequence.length;
+        document.getElementById('score').textContent = score;
+        document.getElementById('simon-status').textContent = `Round ${score}!`;
+        document.getElementById('simon-status').className = 'text-sm font-semibold text-emerald-600 mt-1';
+        sequence.push(COLORS[Math.floor(Math.random() * 4)]);
+        setTimeout(() => {
+            document.getElementById('simon-status').className = 'text-sm font-semibold text-blue-600 mt-1';
+            showSequence();
+        }, 1000);
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+
+{% block title %}Chess — Game Hub{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <div class="flex justify-between items-center mb-4">
+        <div>
+            <h1 class="text-xl font-bold text-slate-800">♟️ Chess</h1>
+            <p class="text-sm text-slate-500" id="game-status">Waiting for opponent...</p>
+        </div>
+        <button onclick="resetGame()" class="px-3 py-1 text-sm bg-slate-200 rounded hover:bg-slate-300">
+            <i class="fas fa-redo mr-1"></i>New Game
+        </button>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-4 inline-block">
+        <div id="chess-board" class="select-none"></div>
+    </div>
+
+    <div class="mt-4 bg-white rounded-lg shadow-sm border border-slate-200 p-4">
+        <h3 class="text-sm font-semibold text-slate-600 mb-2">Move History</h3>
+        <div id="move-history" class="text-sm font-mono text-slate-500 space-x-2"></div>
+    </div>
+
+    <div class="mt-4 game-info">
+        <div class="flex justify-between">
+            <span class="text-sm text-slate-600">Your color: <strong id="player-color">—</strong></span>
+            <span class="text-sm text-slate-600">Opponent: <strong id="opponent-name">—</strong></span>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const pieceMap = {
+        'r': '♜', 'n': '♞', 'b': '♝', 'q': '♛', 'k': '♚', 'p': '♟',
+        'R': '♖', 'N': '♘', 'B': '♗', 'Q': '♕', 'K': '♔', 'P': '♙',
+    };
+
+    const files = 'abcdefgh';
+    let currentFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    let currentPlayer = "white";
+    let selectedSquare = null;
+    let legalMoves = [];
+    let roomId = null;
+    let myRole = null;
+    let opponentName = null;
+    const moveHistory = [];
+
+    function renderBoard(fen) {
+        const board = fen.split(' ')[0];
+        const rows = board.split('/');
+        const tbody = document.createElement('tbody');
+
+        for (let r = 0; r < 8; r++) {
+            const tr = document.createElement('tr');
+            for (let f = 0; f < 8; f++) {
+                const td = document.createElement('td');
+                const piece = rows[7 - r][f];
+                const isLight = (r + f) % 2 === 0;
+
+                if (!isNaN(parseInt(piece))) {
+                    continue;
+                }
+
+                const isWhite = piece === piece.toUpperCase();
+                const cls = isLight ? 'chess-light' : 'chess-dark';
+                const pieceChar = pieceMap[piece.toLowerCase()] || '';
+                const colorClass = isWhite ? 'white' : 'black';
+                td.className = `${cls} cursor-pointer`;
+                td.innerHTML = `<span class="piece ${colorClass}">${pieceChar}</span>`;
+                td.dataset.square = files[f] + (8 - r);
+                td.onclick = () => handleSquareClick(td.dataset.square, piece, isWhite);
+                tr.appendChild(td);
+            }
+            tbody.appendChild(tr);
+        }
+
+        const table = document.createElement('table');
+        table.className = 'game-board';
+        table.appendChild(tbody);
+        const boardEl = document.getElementById('chess-board');
+        boardEl.innerHTML = '';
+        boardEl.appendChild(table);
+    }
+
+    function handleSquareClick(square, piece, isWhitePiece) {
+        if (selectedSquare) {
+            const moveStr = selectedSquare + square;
+            if (window.socket) {
+                window.socket.emit("makeMove", { roomId, move: moveStr, game: "chess" });
+            }
+            selectedSquare = null;
+        } else {
+            if (piece && isWhitePiece === (currentPlayer === "white")) {
+                selectedSquare = square;
+                renderBoard(currentFen);
+            }
+        }
+    }
+
+    function resetGame() {
+        if (window.socket) {
+            window.socket.emit("makeMove", { roomId, move: null, game: "chess", type: "reset" });
+        }
+    }
+
+    function startSoloGame() {
+        roomId = `chess_solo_${Date.now()}`;
+        myRole = "white";
+        currentPlayer = "white";
+        opponentName = "Calypso";
+        document.getElementById("player-color").textContent = "White";
+        document.getElementById("opponent-name").textContent = "Calypso";
+        document.getElementById("game-status").textContent = "Playing against Calypso";
+        if (window.socket) {
+            window.socket.emit("joinRoom", roomId);
+        }
+    }
+
+    // Socket events
+    if (window.socket) {
+        window.socket.on("gameStarted", (data) => {
+            roomId = data.roomId;
+            myRole = data.role;
+            opponentName = data.opponent;
+            currentPlayer = myRole === "X" ? "white" : "black";
+            document.getElementById("player-color").textContent = currentPlayer === "white" ? "White" : "Black";
+            document.getElementById("opponent-name").textContent = opponentName;
+            document.getElementById("game-status").textContent = `Playing against ${opponentName}`;
+            window.socket.emit("joinRoom", roomId);
+        });
+
+        window.socket.on("moveMade", (data) => {
+            if (data.move === "thinking") return;
+            currentFen = data.fen || currentFen;
+            if (data.move && data.move.length === 4) {
+                moveHistory.push(data.move);
+                document.getElementById("move-history").textContent = moveHistory.join(' ');
+            }
+            renderBoard(currentFen);
+        });
+
+        window.socket.on("gameReset", () => {
+            currentFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+            moveHistory.length = 0;
+            document.getElementById("move-history").textContent = '';
+            selectedSquare = null;
+            renderBoard(currentFen);
+        });
+    }
+
+    // Check URL params
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get("room")) {
+        roomId = urlParams.get("room");
+        myRole = urlParams.get("role");
+        opponentName = urlParams.get("opponent");
+        currentPlayer = myRole === "X" ? "white" : "black";
+        document.getElementById("player-color").textContent = currentPlayer === "white" ? "White" : "Black";
+        document.getElementById("opponent-name").textContent = opponentName;
+        document.getElementById("game-status").textContent = `Playing against ${opponentName}`;
+        if (window.socket) {
+            window.socket.emit("joinRoom", roomId);
+        }
+    } else {
+        startSoloGame();
+    }
+
+    renderBoard(currentFen);
+</script>
+{% endblock %}

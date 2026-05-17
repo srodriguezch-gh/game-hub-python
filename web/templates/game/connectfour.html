@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+
+{% block title %}Connect Four — Game Hub{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto text-center">
+    <!-- Player info -->
+    <div class="flex justify-center gap-6 mb-4">
+        <div id="player-red" class="bg-white rounded-lg border-2 border-red-500 px-4 py-3 shadow-sm">
+            <div class="text-sm font-bold text-red-600">{{ current_player|default('Dad') }} (Red)</div>
+            <div class="text-xs text-slate-500">Your turn</div>
+        </div>
+        <div class="text-xl text-slate-300 font-bold self-center">VS</div>
+        <div id="player-black" class="bg-white rounded-lg border-2 border-slate-300 px-4 py-3 shadow-sm">
+            <div class="text-sm font-bold text-slate-600">{{ opponent|default('AI') }}</div>
+            <div class="text-xs text-slate-500">Waiting</div>
+        </div>
+    </div>
+
+    <!-- Hover indicator -->
+    <div id="col-indicator" class="grid grid-cols-7 gap-1 px-1 mb-1"></div>
+
+    <!-- Board -->
+    <div class="bg-blue-600 rounded-xl p-2 inline-block">
+        <div id="connect4-board" class="grid grid-cols-7 gap-1"></div>
+    </div>
+
+    <!-- Result -->
+    <div id="c4-result" class="hidden mt-4 text-xl font-bold"></div>
+
+    <button onclick="resetC4()" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
+        <i class="fas fa-redo mr-1"></i>New Game
+    </button>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const ROWS = 6, COLS = 7;
+let board = Array(ROWS).fill(null).map(() => Array(COLS).fill(null));
+let turn = 'red';
+let winner = null;
+const EMPTY = null;
+
+function initBoard() {
+    board = Array(ROWS).fill(null).map(() => Array(COLS).fill(EMPTY));
+    turn = 'red';
+    winner = null;
+    document.getElementById('c4-result').classList.add('hidden');
+    updatePlayers();
+}
+
+function updatePlayers() {
+    const pRed = document.getElementById('player-red');
+    const pBlack = document.getElementById('player-black');
+    if (turn === 'red') {
+        pRed.classList.add('border-red-500'); pRed.classList.remove('border-slate-300');
+        pRed.querySelector('div:last-child').textContent = 'Your turn';
+        pBlack.classList.add('border-slate-300'); pBlack.classList.remove('border-slate-700');
+        pBlack.querySelector('div:last-child').textContent = 'Waiting';
+    } else {
+        pRed.classList.add('border-slate-300'); pRed.classList.remove('border-red-500');
+        pRed.querySelector('div:last-child').textContent = 'Waiting';
+        pBlack.classList.add('border-slate-700'); pBlack.classList.remove('border-slate-300');
+        pBlack.querySelector('div:last-child').textContent = 'Their turn';
+    }
+}
+
+function render() {
+    const boardEl = document.getElementById('connect4-board');
+    const indicator = document.getElementById('col-indicator');
+    let html = '';
+    for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+            const cell = board[r][c];
+            let bg = 'bg-white';
+            if (cell === 'red') bg = 'bg-red-500';
+            else if (cell === 'black') bg = 'bg-slate-800';
+            const isClickable = !winner && board[0][c] === null && turn === 'red';
+            html += `<button onclick="drop(${c})" class="w-12 h-12 rounded-full border-4 border-blue-600 ${bg} ${isClickable ? 'cursor-pointer hover:brightness-110' : 'cursor-default'}" ${!isClickable ? 'disabled' : ''}></button>`;
+        }
+    }
+    boardEl.innerHTML = html;
+
+    // Hover indicator
+    indicator.innerHTML = Array(COLS).fill(null).map((_,c) => {
+        const color = board[0][c] ? 'transparent' : (turn === 'red' ? 'bg-red-500' : 'bg-slate-800');
+        return `<div class="h-3 rounded-t-full ${color} opacity-50"></div>`;
+    }).join('');
+}
+
+function drop(col) {
+    if (winner || board[0][col] !== null || turn !== 'red') return;
+    for (let r = ROWS - 1; r >= 0; r--) {
+        if (!board[r][col]) { board[r][col] = 'red'; break; }
+    }
+    window.GameHub.playSound('click');
+    if (checkWin('red')) return;
+    if (isDraw()) { winner = 'Draw'; render(); return; }
+    turn = 'black';
+    updatePlayers();
+    render();
+    setTimeout(aiMove, 600);
+}
+
+function aiMove() {
+    if (winner) return;
+    const validCols = [];
+    for (let c = 0; c < COLS; c++) if (!board[0][c]) validCols.push(c);
+    if (!validCols.length) return;
+
+    // Try to win
+    for (let c of validCols) {
+        let r = -1;
+        for (let i = ROWS - 1; i >= 0; i--) { if (!board[i][c]) { r = i; break; } }
+        if (r < 0) continue;
+        board[r][c] = 'black';
+        if (checkWin('black')) { render(); return; }
+        board[r][c] = null;
+    }
+
+    // Block red
+    for (let c of validCols) {
+        let r = -1;
+        for (let i = ROWS - 1; i >= 0; i--) { if (!board[i][c]) { r = i; break; } }
+        if (r < 0) continue;
+        board[r][c] = 'red';
+        if (checkWin('red')) { board[r][c] = 'black'; render(); return; }
+        board[r][c] = null;
+    }
+
+    // Random
+    const col = validCols[Math.floor(Math.random() * validCols.length)];
+    for (let r = ROWS - 1; r >= 0; r--) {
+        if (!board[r][col]) { board[r][col] = 'black'; break; }
+    }
+    window.GameHub.playSound('click');
+    if (checkWin('black')) return;
+    if (isDraw()) { winner = 'Draw'; render(); return; }
+    turn = 'red';
+    updatePlayers();
+    render();
+}
+
+function checkWin(color) {
+    for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+            if (c <= COLS - 4 && board[r][c] === color && board[r][c+1] === color && board[r][c+2] === color && board[r][c+3] === color) { endGame(color); return true; }
+            if (r <= ROWS - 4 && board[r][c] === color && board[r+1][c] === color && board[r+2][c] === color && board[r+3][c] === color) { endGame(color); return true; }
+            if (r <= ROWS - 4 && c <= COLS - 4 && board[r][c] === color && board[r+1][c+1] === color && board[r+2][c+2] === color && board[r+3][c+3] === color) { endGame(color); return true; }
+            if (r >= 3 && c <= COLS - 4 && board[r][c] === color && board[r-1][c+1] === color && board[r-2][c+2] === color && board[r-3][c+3] === color) { endGame(color); return true; }
+        }
+    }
+    return false;
+}
+
+function isDraw() {
+    return board[0].every(c => c !== null);
+}
+
+function endGame(color) {
+    winner = color;
+    const result = document.getElementById('c4-result');
+    result.classList.remove('hidden');
+    if (color === 'Draw') {
+        result.textContent = 'Draw!';
+        result.className = 'mt-4 text-xl font-bold text-slate-600';
+    } else {
+        const won = color === 'red';
+        result.textContent = won ? 'You Won!' : 'AI Wins!';
+        result.className = `mt-4 text-xl font-bold ${won ? 'text-emerald-600' : 'text-red-600'}`;
+        window.GameHub.playSound(won ? 'win' : 'lose');
+    }
+}
+
+function resetC4() {
+    initBoard();
+    render();
+}
+
+initBoard();
+render();
+</script>
+{% endblock %}

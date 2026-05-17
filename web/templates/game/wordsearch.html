@@ -1,0 +1,260 @@
+{% extends "base.html" %}
+
+{% block title %}Word Search Race — Game Hub{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto text-center select-none">
+    <h2 class="text-lg font-bold text-slate-800 mb-4">
+        <i class="fas fa-grid-2 mr-1"></i>Word Search Race
+    </h2>
+
+    <!-- Players -->
+    <div class="flex justify-center items-center gap-4 mb-4">
+        <div class="bg-blue-50 rounded-xl border-2 border-blue-500 px-4 py-2">
+            <div class="text-sm font-bold text-blue-600">{{ current_player|default('Dad') }}</div>
+            <div class="text-xs text-blue-500" id="player-found">0 Words</div>
+        </div>
+        <div class="text-lg text-slate-300 font-bold">VS</div>
+        <div class="bg-red-50 rounded-xl border-2 border-red-400 px-4 py-2">
+            <div class="text-sm font-bold text-red-600">{{ opponent|default('Calypso') }}</div>
+            <div class="text-xs text-red-500" id="opponent-found">0 Words</div>
+        </div>
+    </div>
+
+    <!-- Category -->
+    <div class="mb-3 text-xs text-slate-400 uppercase tracking-wide">Topic: <span id="word-category" class="text-slate-600 font-semibold">—</span></div>
+
+    <!-- Grid + Word list side by side -->
+    <div class="flex flex-col md:flex-row gap-4 items-start justify-center">
+        <!-- Grid -->
+        <div id="word-board" class="grid gap-0.5 bg-white p-2 rounded-xl border-4 border-yellow-400 shadow-lg" style="grid-template-columns: repeat(10, 1fr); max-width: 360px; width: 100%;"></div>
+
+        <!-- Word list -->
+        <div class="bg-slate-50 rounded-xl p-4 min-w-[140px] text-left border border-slate-200">
+            <div class="text-xs text-slate-400 uppercase tracking-wide mb-2">Find these:</div>
+            <div id="word-list" class="space-y-1"></div>
+        </div>
+    </div>
+
+    <!-- Result -->
+    <div id="ws-result" class="hidden mt-4 text-xl font-bold"></div>
+
+    <button onclick="initWS()" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm">
+        <i class="fas fa-shuffle mr-1"></i>New Game
+    </button>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const GRID_SIZE = 10;
+const CATEGORIES = {
+    Family: ['MATEO','EMMA','DAD','CALYPSO','MOM','SILVIO','MARIA'],
+    Pokemon: ['PIKACHU','EEVEE','GENGAR','MEWTWO','LUCARIO','SNORLAX','MEW'],
+    Animals: ['TIGER','LION','ELEPHANT','GIRAFFE','MONKEY','RABBIT','DOLPHIN','SHARK'],
+    Colors: ['RED','BLUE','GREEN','YELLOW','PURPLE','ORANGE','PINK','SILVER'],
+    Cartoons: ['BLUEY','BINGO','MICKEY','PATRICK','PEPPA','SONIC','SCOOBY'],
+    'Harry Potter': ['HARRY','RON','HERMIONE','DRACO','HAGRID','DOBBY','SNAPE','LUNA'],
+    Marvel: ['IRONMAN','HULK','THOR','SPIDER','GROOT','VENOM','THANOS'],
+};
+
+let grid = [];
+let words = [];
+let foundByPlayer = [];
+let foundByOpponent = [];
+let category = '';
+let selecting = false;
+let startCell = null;
+let endCell = null;
+let gameStarted = false;
+
+function initWS() {
+    const keys = Object.keys(CATEGORIES);
+    category = keys[Math.floor(Math.random() * keys.length)];
+    words = [...CATEGORIES[category]].slice(0, 5);
+    document.getElementById('word-category').textContent = category;
+    foundByPlayer = [];
+    foundByOpponent = [];
+    foundByOpponent = [];
+    gameStarted = false;
+    document.getElementById('ws-result').classList.add('hidden');
+
+    grid = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(''));
+
+    words.forEach(word => {
+        let placed = false, attempts = 0;
+        while (!placed && attempts < 100) {
+            const dir = Math.floor(Math.random() * 3); // 0=horiz, 1=vert, 2=diag
+            const r = Math.floor(Math.random() * GRID_SIZE);
+            const c = Math.floor(Math.random() * GRID_SIZE);
+            if (canPlace(word, r, c, dir)) {
+                placeWord(word, r, c, dir);
+                placed = true;
+            }
+            attempts++;
+        }
+    });
+
+    for (let r = 0; r < GRID_SIZE; r++) {
+        for (let c = 0; c < GRID_SIZE; c++) {
+            if (!grid[r][c]) grid[r][c] = String.fromCharCode(65 + Math.floor(Math.random() * 26));
+        }
+    }
+
+    renderBoard();
+    renderWordList();
+}
+
+function canPlace(word, r, c, dir) {
+    for (let i = 0; i < word.length; i++) {
+        const nr = dir === 1 ? r + i : dir === 2 ? r + i : r;
+        const nc = dir === 0 ? c + i : dir === 2 ? c + i : c;
+        if (nr >= GRID_SIZE || nc >= GRID_SIZE) return false;
+        if (grid[nr][nc] && grid[nr][nc] !== word[i]) return false;
+    }
+    return true;
+}
+
+function placeWord(word, r, c, dir) {
+    for (let i = 0; i < word.length; i++) {
+        const nr = dir === 1 ? r + i : dir === 2 ? r + i : r;
+        const nc = dir === 0 ? c + i : dir === 2 ? c + i : c;
+        grid[nr][nc] = word[i];
+    }
+}
+
+function renderBoard() {
+    const boardEl = document.getElementById('word-board');
+    let html = '';
+    for (let r = 0; r < GRID_SIZE; r++) {
+        for (let c = 0; c < GRID_SIZE; c++) {
+            const isSelected = isInSelection(r, c);
+            const bg = isSelected ? 'bg-emerald-400 text-white border-emerald-600' : 'bg-slate-100 text-slate-800 border-transparent';
+            html += `<button data-r="${r}" data-c="${c}" onclick="startSelect(${r},${c})" class="aspect-square w-7 flex items-center justify-center text-xs font-bold rounded border-2 ${bg} cursor-pointer transition-all">${grid[r][c]}</button>`;
+        }
+    }
+    boardEl.innerHTML = html;
+    boardEl.style.gridTemplateColumns = `repeat(${GRID_SIZE}, 1fr)`;
+}
+
+function renderWordList() {
+    const listEl = document.getElementById('word-list');
+    listEl.innerHTML = words.map(w => {
+        const byPlayer = foundByPlayer.includes(w);
+        const byOpp = foundByOpponent.includes(w);
+        const bg = byPlayer ? 'bg-blue-50 border-blue-400' : byOpp ? 'bg-red-50 border-red-400' : 'bg-white border-slate-200';
+        const color = byPlayer ? 'text-blue-600' : byOpp ? 'text-red-500' : 'text-slate-800';
+        const strike = byPlayer || byOpp ? 'line-through' : 'none';
+        return `<div class="flex justify-between items-center px-2 py-1 rounded border ${bg}">
+            <span class="${color} text-xs font-bold" style="text-decoration:${strike}">${w}</span>
+            ${byPlayer ? '<span class="text-xs">⭐</span>' : ''}${byOpp ? '<span class="text-xs">🐾</span>' : ''}
+        </div>`;
+    }).join('');
+    document.getElementById('player-found').textContent = foundByPlayer.length + ' Words';
+    document.getElementById('opponent-found').textContent = foundByOpponent.length + ' Words';
+}
+
+function isInSelection(r, c) {
+    if (!startCell || !endCell) return false;
+    const { r: r1, c: c1 } = startCell;
+    const { r: r2, c: c2 } = endCell;
+    if (r1 === r2 && r === r1) return c >= Math.min(c1, c2) && c <= Math.max(c1, c2);
+    if (c1 === c2 && c === c1) return r >= Math.min(r1, r2) && r <= Math.max(r1, r2);
+    if (Math.abs(r1 - r2) === Math.abs(c1 - c2)) {
+        const dr = r2 > r1 ? 1 : -1;
+        const dc = c2 > c1 ? 1 : -1;
+        const steps = Math.abs(r1 - r2);
+        for (let i = 0; i <= steps; i++) {
+            if (r1 + i * dr === r && c1 + i * dc === c) return true;
+        }
+    }
+    return false;
+}
+
+function getSelectedWord() {
+    if (!startCell || !endCell) return '';
+    const { r: r1, c: c1 } = startCell;
+    const { r: r2, c: c2 } = endCell;
+    let word = '';
+    if (r1 === r2) {
+        const s = Math.min(c1, c2), e = Math.max(c1, c2);
+        for (let i = s; i <= e; i++) word += grid[r1][i];
+    } else if (c1 === c2) {
+        const s = Math.min(r1, r2), e = Math.max(r1, r2);
+        for (let i = s; i <= e; i++) word += grid[i][c1];
+    } else if (Math.abs(r1 - r2) === Math.abs(c1 - c2)) {
+        const dr = r2 > r1 ? 1 : -1;
+        const dc = c2 > c1 ? 1 : -1;
+        const steps = Math.abs(r1 - r2);
+        for (let i = 0; i <= steps; i++) word += grid[r1 + i * dr][c1 + i * dc];
+    }
+    return word;
+}
+
+function startSelect(r, c) {
+    if (!gameStarted) gameStarted = true;
+    startCell = { r, c };
+    endCell = { r, c };
+    selecting = true;
+    updateSelection();
+}
+
+function updateSelection() {
+    const cells = document.querySelectorAll('#word-board button');
+    cells.forEach(cell => {
+        const r = parseInt(cell.dataset.r);
+        const c = parseInt(cell.dataset.c);
+        const isSel = isInSelection(r, c);
+        const wasSel = cell.classList.contains('bg-emerald-400');
+        if (isSel !== wasSel) {
+            cell.classList.toggle('bg-emerald-400', isSel);
+            cell.classList.toggle('text-white', isSel);
+            cell.classList.toggle('bg-slate-100', !isSel);
+            cell.classList.toggle('text-slate-800', !isSel);
+            cell.classList.toggle('border-emerald-600', isSel);
+            cell.classList.toggle('border-transparent', !isSel);
+        }
+    });
+}
+
+function endSelect() {
+    if (!selecting) return;
+    selecting = false;
+    const selectedWord = getSelectedWord();
+    if (words.includes(selectedWord) && !foundByPlayer.includes(selectedWord) && !foundByOpponent.includes(selectedWord)) {
+        foundByPlayer.push(selectedWord);
+        window.GameHub.playSound('win');
+        checkWin();
+    }
+    startCell = null;
+    endCell = null;
+    renderWordList();
+}
+
+function checkWin() {
+    if (foundByPlayer.length + foundByOpponent.length === words.length) {
+        const playerWon = foundByPlayer.length >= foundByOpponent.length;
+        const result = document.getElementById('ws-result');
+        result.classList.remove('hidden');
+        result.textContent = playerWon ? 'YOU WON!' : 'CALYPSO WON!';
+        result.className = `mt-4 text-xl font-bold ${playerWon ? 'text-emerald-600' : 'text-red-600'}`;
+        window.GameHub.playSound(playerWon ? 'win' : 'lose');
+    }
+}
+
+// Touch support
+document.addEventListener('touchmove', e => {
+    if (!selecting) return;
+    const touch = e.touches[0];
+    const cell = document.elementFromPoint(touch.clientX, touch.clientY);
+    if (cell && cell.dataset.r !== undefined) {
+        endCell = { r: parseInt(cell.dataset.r), c: parseInt(cell.dataset.c) };
+        updateSelection();
+    }
+}, { passive: true });
+
+document.addEventListener('touchend', endSelect);
+
+initWS();
+</script>
+{% endblock %}

@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+
+{% block title %}Checkers — Game Hub{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto text-center">
+    <!-- Players -->
+    <div class="flex justify-center gap-6 mb-4">
+        <div id="player-red" class="bg-red-50 rounded-xl border-2 border-red-500 px-4 py-3">
+            <div class="text-sm font-bold text-red-600">{{ current_player|default('Dad') }}</div>
+            <div class="text-xs text-slate-500" id="red-status">Your turn</div>
+        </div>
+        <div class="text-xl text-slate-300 font-bold self-center">VS</div>
+        <div id="player-black" class="bg-slate-50 rounded-xl border-2 border-slate-300 px-4 py-3">
+            <div class="text-sm font-bold text-slate-600">{{ opponent|default('AI') }}</div>
+            <div class="text-xs text-slate-500" id="black-status">Waiting</div>
+        </div>
+    </div>
+
+    <!-- Board -->
+    <div id="checkers-board" class="inline-grid grid-cols-8 border-4 border-slate-800 rounded-lg overflow-hidden shadow-lg"></div>
+
+    <!-- Result -->
+    <div id="checkers-result" class="hidden mt-4 text-xl font-bold"></div>
+
+    <button onclick="resetCheckers()" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
+        <i class="fas fa-redo mr-1"></i>New Game
+    </button>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const SIZE = 8;
+let board = [];
+let turn = 'red';
+let selected = null;
+let winner = null;
+
+function initBoard() {
+    board = Array(SIZE).fill(null).map(() => Array(SIZE).fill(null));
+    for (let r = 0; r < SIZE; r++) {
+        for (let c = 0; c < SIZE; c++) {
+            if ((r + c) % 2 === 1) {
+                if (r < 3) board[r][c] = { color: 'black', king: false };
+                if (r > 4) board[r][c] = { color: 'red', king: false };
+            }
+        }
+    }
+    turn = 'red';
+    selected = null;
+    winner = null;
+    document.getElementById('checkers-result').classList.add('hidden');
+    updatePlayers();
+}
+
+function updatePlayers() {
+    const redEl = document.getElementById('player-red');
+    const blackEl = document.getElementById('player-black');
+    if (turn === 'red') {
+        redEl.classList.add('border-red-500'); redEl.classList.remove('border-slate-300');
+        redEl.querySelector('#red-status').textContent = 'Your turn';
+        blackEl.classList.add('border-slate-300'); blackEl.classList.remove('border-slate-700');
+        blackEl.querySelector('#black-status').textContent = 'Waiting';
+    } else {
+        redEl.classList.add('border-slate-300'); redEl.classList.remove('border-red-500');
+        redEl.querySelector('#red-status').textContent = 'Waiting';
+        blackEl.classList.add('border-slate-700'); blackEl.classList.remove('border-slate-300');
+        blackEl.querySelector('#black-status').textContent = 'Their turn';
+    }
+}
+
+function getValidMoves(r, c, color) {
+    const moves = [];
+    const piece = board[r][c];
+    if (!piece) return moves;
+    const dirs = piece.king ? [-1, 1] : color === 'red' ? [-1] : [1];
+    dirs.forEach(dr => {
+        [-1, 1].forEach(dc => {
+            const nr = r + dr, nc = c + dc;
+            if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+                if (!board[nr][nc]) moves.push({ r: nr, c: nc });
+                else if (board[nr][nc].color !== color) {
+                    const jr = nr + dr, jc = nc + dc;
+                    if (jr >= 0 && jr < 8 && jc >= 0 && jc < 8 && !board[jr][jc]) {
+                        moves.push({ r: jr, c: jc, jump: { r: nr, c: nc } });
+                    }
+                }
+            }
+        });
+    });
+    return moves;
+}
+
+function render() {
+    const boardEl = document.getElementById('checkers-board');
+    let html = '';
+    for (let r = 0; r < SIZE; r++) {
+        for (let c = 0; c < SIZE; c++) {
+            const cell = board[r][c];
+            const isDark = (r + c) % 2 === 1;
+            const isSelected = selected && selected.r === r && selected.c === c;
+            const bg = isDark ? 'bg-slate-700' : 'bg-slate-300';
+            const selBorder = isSelected ? 'outline-4 outline-yellow-400 outline' : '';
+            let content = '';
+            if (cell) {
+                const color = cell.color === 'red' ? '#ef4444' : '#1e293b';
+                content = `<div class="w-4/5 h-4/5 rounded-full border-2 border-white flex items-center justify-center" style="background:${color}">${cell.king ? '<i class="fas fa-crown text-yellow-400 text-xs"></i>' : ''}</div>`;
+            }
+            html += `<button onclick="handleClick(${r},${c})" class="aspect-square w-10 flex items-center justify-center ${bg} ${selBorder} border-none p-0 ${isDark ? 'cursor-pointer' : 'cursor-default'}">${content}</button>`;
+        }
+    }
+    boardEl.innerHTML = html;
+}
+
+function handleClick(r, c) {
+    if (winner || turn !== 'red') return;
+    if (selected) {
+        const move = getValidMoves(selected.r, selected.c, turn).find(m => m.r === r && m.c === c);
+        if (move) {
+            const newBoard = board.map(row => [...row]);
+            const piece = newBoard[selected.r][selected.c];
+            newBoard[r][c] = piece;
+            newBoard[selected.r][selected.c] = null;
+            if (move.jump) newBoard[move.jump.r][move.jump.c] = null;
+            if (r === 0) piece.king = true;
+            board = newBoard;
+            selected = null;
+            turn = 'black';
+            window.GameHub.playSound('move');
+            updatePlayers();
+            render();
+            setTimeout(aiMove, 600);
+            return;
+        }
+        selected = null;
+    }
+    if (board[r][c] && board[r][c].color === 'red') {
+        selected = { r, c };
+        render();
+    }
+}
+
+function aiMove() {
+    if (winner) return;
+    const pieces = [];
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) if (board[r][c]?.color === 'black') pieces.push({ r, c });
+    const allMoves = pieces.flatMap(p => getValidMoves(p.r, p.c, 'black').map(m => ({ from: p, to: m })));
+    if (!allMoves.length) { endGame('{{ current_player|default("Dad") }}'); return; }
+    const jumps = allMoves.filter(m => m.to.jump);
+    const move = jumps.length ? jumps[Math.floor(Math.random() * jumps.length)] : allMoves[Math.floor(Math.random() * allMoves.length)];
+    const newBoard = board.map(row => [...row]);
+    const piece = newBoard[move.from.r][move.from.c];
+    newBoard[move.to.r][move.to.c] = piece;
+    newBoard[move.from.r][move.from.c] = null;
+    if (move.to.jump) newBoard[move.to.jump.r][move.to.jump.c] = null;
+    if (move.to.r === 7) piece.king = true;
+    board = newBoard;
+    turn = 'red';
+    window.GameHub.playSound('move');
+    const playerMoves = pieces.flatMap(p => getValidMoves(p.r, p.c, board, 'red'));
+    if (!playerMoves.length) { endGame('{{ opponent|default("AI") }}'); return; }
+    updatePlayers();
+    render();
+}
+
+function endGame(winnerName) {
+    winner = winnerName;
+    const result = document.getElementById('checkers-result');
+    result.classList.remove('hidden');
+    const isPlayer = winnerName === '{{ current_player|default("Dad") }}';
+    result.textContent = `${winnerName} Wins!`;
+    result.className = `mt-4 text-xl font-bold ${isPlayer ? 'text-emerald-600' : 'text-red-600'}`;
+    window.GameHub.playSound(isPlayer ? 'win' : 'lose');
+}
+
+function resetCheckers() {
+    initBoard();
+    render();
+}
+
+initBoard();
+render();
+</script>
+{% endblock %}

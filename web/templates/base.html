@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}Game Hub{% endblock %}</title>
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <link href="https://cdn.tailwindcss.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.3/css/all.min.css" rel="stylesheet" />
+    <link href="/static/silrod/silrod.css" rel="stylesheet" />
+    <link href="/static/theme.css" rel="stylesheet" />
+    <script src="/static/game-client.js"></script>
+    {% block head %}{% endblock %}
+</head>
+<body class="bg-slate-50 min-h-screen flex flex-col">
+    <nav class="bg-white shadow-sm border-b border-slate-200 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex justify-between items-center h-14">
+                <div class="flex items-center gap-3">
+                    <a href="/" class="text-lg font-bold text-slate-800">[silrod]</a>
+                    <span class="text-slate-300">|</span>
+                    <span class="text-sm font-medium text-blue-600">Game Hub</span>
+                </div>
+                <div class="flex items-center gap-4">
+                    <a href="/leaderboard" class="text-sm text-slate-600 hover:text-slate-800">
+                        <i class="fas fa-trophy mr-1"></i>Leaderboard
+                    </a>
+                    <a href="/tasks" class="text-sm text-slate-600 hover:text-slate-800">
+                        <i class="fas fa-tasks mr-1"></i>Tasks
+                    </a>
+                    <span id="online-indicator" class="text-xs text-slate-400">
+                        <i class="fas fa-circle text-slate-300"></i> --
+                    </span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="flex-1 max-w-7xl mx-auto w-full p-6">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="bg-slate-800 text-white py-4 mt-auto border-t border-slate-700">
+        <div class="max-w-7xl mx-auto px-4 text-center text-xs text-slate-400">
+            Game Hub &copy; 2026
+        </div>
+    </footer>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

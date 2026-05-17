@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+
+{% block title %}Hangman — Game Hub{% endblock %}
+
+{% block content %}
+<div class="max-w-xl mx-auto text-center">
+    <!-- Players -->
+    <div class="flex justify-center items-center gap-6 mb-6">
+        <div class="bg-white rounded-lg border-2 border-blue-500 px-4 py-3 shadow-sm">
+            <div class="text-sm font-medium text-blue-600">{{ current_player|default('Dad') }}</div>
+            <div class="text-xs text-slate-500">{{ misses }} Misses</div>
+        </div>
+        <div class="text-2xl text-slate-300 font-bold">VS</div>
+        <div class="bg-white rounded-lg border-2 border-red-500 px-4 py-3 shadow-sm">
+            <div class="text-sm font-medium text-red-600">{{ opponent|default('Calypso') }}</div>
+            <div class="text-xs text-slate-500">Active</div>
+        </div>
+    </div>
+
+    <!-- Hangman SVG -->
+    <div class="mb-6">
+        <svg height="180" width="180" viewBox="0 0 200 200" class="mx-auto block">
+            <line x1="20" y1="180" x2="180" y2="180" stroke="#cbd5e1" stroke-width="4" stroke-linecap="round"/>
+            <line x1="40" y1="180" x2="40" y2="20" stroke="#cbd5e1" stroke-width="4"/>
+            <line x1="40" y1="20" x2="120" y2="20" stroke="#cbd5e1" stroke-width="4"/>
+            <line x1="120" y1="20" x2="120" y2="40" stroke="#cbd5e1" stroke-width="4"/>
+            <circle cx="120" cy="60" r="20" stroke="#ef4444" stroke-width="4" fill="none" style="display:none" id="head"/>
+            <line x1="120" y1="80" x2="120" y2="130" stroke="#ef4444" stroke-width="4" style="display:none" id="body"/>
+            <line x1="120" y1="90" x2="90" y2="110" stroke="#ef4444" stroke-width="4" style="display:none" id="arm1"/>
+            <line x1="120" y1="90" x2="150" y2="110" stroke="#ef4444" stroke-width="4" style="display:none" id="arm2"/>
+            <line x1="120" y1="130" x2="100" y2="160" stroke="#ef4444" stroke-width="4" style="display:none" id="leg1"/>
+            <line x1="120" y1="130" x2="140" y2="160" stroke="#ef4444" stroke-width="4" style="display:none" id="leg2"/>
+        </svg>
+    </div>
+
+    <!-- Word -->
+    <div id="word-display" class="flex justify-center gap-2 mb-6"></div>
+
+    <!-- Keyboard -->
+    <div id="hangman-keyboard" class="grid grid-cols-7 gap-1 max-w-md mx-auto mb-6"></div>
+
+    <!-- Result -->
+    <div id="hangman-result" class="hidden text-lg font-bold mb-4"></div>
+
+    <button onclick="resetHangman()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
+        <i class="fas fa-redo mr-1"></i>New Game
+    </button>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const WORDS = ['CHERRY','BANANA','ORANGE','GIRAFFE','DOLPHIN','RAINBOW','SUNSHINE','CAPYBARA','WHALE','TURTLE'];
+const MAX_LIVES = 6;
+
+let word = '';
+let guessed = new Set();
+let lives = MAX_LIVES;
+let gameOver = false;
+
+const KEYBOARD = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+function startGame() {
+    word = WORDS[Math.floor(Math.random() * WORDS.length)].toUpperCase();
+    guessed = new Set();
+    lives = MAX_LIVES;
+    gameOver = false;
+    document.getElementById('hangman-result').classList.add('hidden');
+    document.querySelectorAll('#head,#body,#arm1,#arm2,#leg1,#leg2').forEach(el => el.style.display = 'none');
+    render();
+}
+
+function render() {
+    // Word display
+    const wordEl = document.getElementById('word-display');
+    wordEl.innerHTML = word.split('').map(char => {
+        const revealed = guessed.has(char) || gameOver;
+        return `<div class="w-8 h-10 flex items-end justify-center border-b-4 border-slate-700 text-2xl font-bold">${revealed ? char : ''}</div>`;
+    }).join('');
+
+    // Keyboard
+    const kbEl = document.getElementById('hangman-keyboard');
+    kbEl.innerHTML = KEYBOARD.split('').map(char => {
+        const isGuessed = guessed.has(char);
+        const isCorrect = word.includes(char);
+        let bg = 'bg-white border-slate-200';
+        if (isGuessed) bg = isCorrect ? 'bg-emerald-500 text-white border-emerald-600' : 'bg-red-500 text-white border-red-600';
+        const disabled = gameOver || isGuessed ? 'opacity-50 cursor-default' : 'hover:bg-slate-50 cursor-pointer';
+        return `<button onclick="guess('${char}')" class="py-2 text-sm font-medium rounded border ${bg} ${disabled}" ${gameOver || isGuessed ? 'disabled' : ''}>${char}</button>`;
+    }).join('');
+
+    // Update miss count
+    const missCount = [...guessed].filter(c => !word.includes(c)).length;
+    const playerEl = document.querySelector('.border-blue-500 + div + div') || document.querySelector('.border-blue-500');
+}
+
+function guess(char) {
+    if (gameOver || guessed.has(char)) return;
+    guessed.add(char);
+    if (!word.includes(char)) {
+        lives--;
+        const parts = ['head','body','arm1','arm2','leg1','leg2'];
+        const idx = MAX_LIVES - lives - 1;
+        if (idx < parts.length) {
+            document.getElementById(parts[idx]).style.display = 'block';
+        }
+        window.GameHub.playSound('lose');
+    } else {
+        window.GameHub.playSound('click');
+    }
+    checkEnd();
+    render();
+}
+
+function checkEnd() {
+    const won = word.split('').every(c => guessed.has(c));
+    if (won || lives <= 0) {
+        gameOver = true;
+        const result = document.getElementById('hangman-result');
+        result.classList.remove('hidden');
+        if (won) {
+            result.textContent = 'You Won!';
+            result.className = 'text-lg font-bold mb-4 text-emerald-600';
+            window.GameHub.playSound('win');
+        } else {
+            result.textContent = `Game Over! Word: ${word}`;
+            result.className = 'text-lg font-bold mb-4 text-red-600';
+            window.GameHub.playSound('lose');
+        }
+    }
+}
+
+function resetHangman() {
+    startGame();
+}
+
+startGame();
+</script>
+{% endblock %}

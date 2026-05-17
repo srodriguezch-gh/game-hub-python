@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block title %}Rock Paper Scissors — Game Hub{% endblock %}
+
+{% block content %}
+<div class="max-w-lg mx-auto text-center">
+    <!-- Scores -->
+    <div class="flex justify-center gap-6 mb-6">
+        <div class="bg-blue-50 rounded-xl border-2 border-blue-500 px-5 py-3">
+            <div class="text-sm font-medium text-blue-600">{{ current_player|default('Dad') }}</div>
+            <div class="text-2xl font-bold text-blue-600" id="score-you">0</div>
+        </div>
+        <div class="text-2xl text-slate-300 font-bold self-center">VS</div>
+        <div class="bg-red-50 rounded-xl border-2 border-red-400 px-5 py-3">
+            <div class="text-sm font-medium text-red-600">{{ opponent|default('AI') }}</div>
+            <div class="text-2xl font-bold text-red-600" id="score-ai">0</div>
+        </div>
+    </div>
+
+    <!-- Battle area -->
+    <div class="flex justify-center items-center gap-6 mb-6 min-h-[120px]">
+        <div class="flex-1 text-center">
+            <div id="your-choice" class="text-5xl text-slate-300">
+                <i class="fas fa-hand-rock"></i>
+            </div>
+            <div class="text-xs text-slate-400 mt-1">You</div>
+        </div>
+        <div class="text-2xl font-bold" id="result-text"></div>
+        <div class="flex-1 text-center">
+            <div id="ai-choice" class="text-5xl text-slate-300">
+                <i class="fas fa-question-circle"></i>
+            </div>
+            <div class="text-xs text-slate-400 mt-1">AI</div>
+        </div>
+    </div>
+
+    <!-- Choices -->
+    <div id="rps-buttons" class="flex justify-center gap-3 mb-4">
+        <button onclick="playRPS('rock')" class="w-20 h-20 bg-white rounded-xl border-2 border-slate-200 hover:border-slate-400 hover:bg-slate-50 text-3xl text-slate-600 shadow-sm transition">
+            <i class="fas fa-hand-rock"></i>
+        </button>
+        <button onclick="playRPS('paper')" class="w-20 h-20 bg-white rounded-xl border-2 border-blue-400 hover:border-blue-500 hover:bg-blue-50 text-3xl text-blue-500 shadow-sm transition">
+            <i class="fas fa-hand-paper"></i>
+        </button>
+        <button onclick="playRPS('scissors')" class="w-20 h-20 bg-white rounded-xl border-2 border-red-400 hover:border-red-500 hover:bg-red-50 text-3xl text-red-500 shadow-sm transition">
+            <i class="fas fa-hand-scissors"></i>
+        </button>
+    </div>
+
+    <p class="text-xs text-slate-400">Best of 5 &middot; AI picks randomly</p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const CHOICES = {
+    rock: { icon: 'fa-hand-rock', color: 'text-slate-600', beats: 'scissors' },
+    paper: { icon: 'fa-hand-paper', color: 'text-blue-500', beats: 'rock' },
+    scissors: { icon: 'fa-hand-scissors', color: 'text-red-500', beats: 'paper' },
+};
+const AI_CHOICES = ['rock', 'paper', 'scissors'];
+const WIN_SCORE = 5;
+
+let scores = { you: 0, ai: 0 };
+let myChoice = null;
+let aiChoice = null;
+let result = null;
+let gameOver = false;
+
+const outcomes = {
+    rock: { rock: 'draw', paper: 'lose', scissors: 'win' },
+    paper: { rock: 'win', paper: 'draw', scissors: 'lose' },
+    scissors: { rock: 'lose', paper: 'win', scissors: 'draw' },
+};
+
+function playRPS(choice) {
+    if (gameOver) return;
+    myChoice = choice;
+    aiChoice = AI_CHOICES[Math.floor(Math.random() * 3)];
+
+    const c = CHOICES[choice];
+    document.getElementById('your-choice').innerHTML = `<i class="fas ${c.icon} ${c.color}"></i>`;
+    document.getElementById('your-choice').className = `text-5xl ${c.color}`;
+
+    const a = CHOICES[aiChoice];
+    document.getElementById('ai-choice').innerHTML = `<i class="fas ${a.icon} ${a.color}"></i>`;
+    document.getElementById('ai-choice').className = `text-5xl ${a.color}`;
+
+    result = outcomes[choice][aiChoice];
+    const resultEl = document.getElementById('result-text');
+
+    if (result === 'win') {
+        scores.you++;
+        resultEl.innerHTML = '<span class="text-emerald-500 font-bold">WON</span>';
+        window.GameHub.playSound('win');
+    } else if (result === 'lose') {
+        scores.ai++;
+        resultEl.innerHTML = '<span class="text-red-500 font-bold">LOST</span>';
+        window.GameHub.playSound('lose');
+    } else {
+        resultEl.innerHTML = '<span class="text-slate-400 font-bold">DRAW</span>';
+        window.GameHub.playSound('click');
+    }
+
+    document.getElementById('score-you').textContent = scores.you;
+    document.getElementById('score-ai').textContent = scores.ai;
+
+    if (scores.you >= WIN_SCORE || scores.ai >= WIN_SCORE) {
+        gameOver = true;
+        resultEl.innerHTML = scores.you >= WIN_SCORE
+            ? '<span class="text-emerald-500 font-bold">YOU WIN!</span>'
+            : '<span class="text-red-500 font-bold">AI WINS!</span>';
+    }
+}
+
+function resetRPS() {
+    scores = { you: 0, ai: 0 };
+    myChoice = null;
+    aiChoice = null;
+    result = null;
+    gameOver = false;
+    document.getElementById('score-you').textContent = '0';
+    document.getElementById('score-ai').textContent = '0';
+    document.getElementById('result-text').innerHTML = '';
+    document.getElementById('your-choice').innerHTML = '<i class="fas fa-hand-rock"></i>';
+    document.getElementById('your-choice').className = 'text-5xl text-slate-300';
+    document.getElementById('ai-choice').innerHTML = '<i class="fas fa-question-circle"></i>';
+    document.getElementById('ai-choice').className = 'text-5xl text-slate-300';
+}
+</script>
+{% endblock %}

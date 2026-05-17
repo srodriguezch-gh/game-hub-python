@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+
+{% block title %}Snake — Game Hub{% endblock %}
+
+{% block content %}
+<div class="max-w-lg mx-auto text-center">
+    <div class="flex justify-center gap-6 mb-4">
+        <div class="bg-white rounded-lg border border-slate-200 px-5 py-3 shadow-sm">
+            <div class="text-xs text-slate-500 uppercase tracking-wide">Score</div>
+            <div class="text-2xl font-bold text-slate-800" id="score">0</div>
+        </div>
+        <div class="bg-white rounded-lg border border-slate-200 px-5 py-3 shadow-sm">
+            <div class="text-xs text-slate-500 uppercase tracking-wide">Best</div>
+            <div class="text-2xl font-bold text-slate-800" id="high-score">0</div>
+        </div>
+    </div>
+
+    <div id="snake-board" class="relative bg-slate-100 rounded-xl border-2 border-slate-200 mx-auto overflow-hidden" style="width:300px;aspect-ratio:1/1;"></div>
+
+    <div id="snake-overlay" class="hidden absolute inset-0 bg-slate-800/80 rounded-xl flex flex-col justify-center items-center text-white" style="width:300px;margin:0 auto;">
+        <i class="fas fa-skull text-4xl mb-3 text-red-400"></i>
+        <h2 class="text-xl font-bold mb-1">Game Over!</h2>
+        <p class="text-sm text-slate-300 mb-4">Score: <span id="final-score">0</span></p>
+        <button onclick="resetSnake()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">Play Again</button>
+    </div>
+
+    <div class="mt-6 flex flex-col items-center gap-1">
+        <button onclick="setDirection(0,-1)" class="w-14 h-14 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 text-lg shadow-sm">
+            <i class="fas fa-chevron-up"></i>
+        </button>
+        <div class="flex gap-1">
+            <button onclick="setDirection(-1,0)" class="w-14 h-14 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 text-lg shadow-sm">
+                <i class="fas fa-chevron-left"></i>
+            </button>
+            <button onclick="togglePause()" class="w-14 h-14 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 text-lg shadow-sm">
+                <i class="fas fa-pause"></i>
+            </button>
+            <button onclick="setDirection(1,0)" class="w-14 h-14 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 text-lg shadow-sm">
+                <i class="fas fa-chevron-right"></i>
+            </button>
+        </div>
+        <button onclick="setDirection(0,1)" class="w-14 h-14 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 text-lg shadow-sm">
+            <i class="fas fa-chevron-down"></i>
+        </button>
+    </div>
+
+    <p class="mt-4 text-xs text-slate-400">
+        <i class="fas fa-keyboard mr-1"></i>Arrow keys to move &middot; Space to pause &middot; Swipe on mobile
+    </p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const GRID_SIZE = 20;
+    const SPEED = 120;
+    const INITIAL_SNAKE = [[10,10],[10,11],[10,12]];
+    const INITIAL_DIR = [0,-1];
+
+    let snake = INITIAL_SNAKE.map(p => [...p]);
+    let direction = [...INITIAL_DIR];
+    let nextDirection = [...INITIAL_DIR];
+    let food = [5,5];
+    let score = 0;
+    let highScore = parseInt(localStorage.getItem('snakeHighScore') || '0');
+    let gameOver = false;
+    let paused = false;
+    let interval = null;
+
+    document.getElementById('high-score').textContent = highScore;
+
+    function generateFood() {
+        let pos;
+        do {
+            pos = [Math.floor(Math.random()*GRID_SIZE), Math.floor(Math.random()*GRID_SIZE)];
+        } while (snake.some(s => s[0]===pos[0] && s[1]===pos[1]));
+        food = pos;
+    }
+
+    function render() {
+        const board = document.getElementById('snake-board');
+        const cellSize = 5;
+        let html = '';
+        snake.forEach((seg, i) => {
+            const color = i === 0 ? '#3b82f6' : '#60a5fa';
+            const radius = i === 0 ? '4px' : '2px';
+            html += `<div class="absolute" style="left:${seg[0]*cellSize}%;top:${seg[1]*cellSize}%;width:${cellSize}%;height:${cellSize}%;background:${color};border-radius:${radius};"></div>`;
+        });
+        html += `<div class="absolute rounded-full" style="left:${food[0]*cellSize}%;top:${food[1]*cellSize}%;width:${cellSize}%;height:${cellSize}%;background:#ef4444;box-shadow:0 0 8px #ef4444;"></div>`;
+        board.innerHTML = html;
+        document.getElementById('score').textContent = score;
+    }
+
+    function step() {
+        if (gameOver || paused) return;
+        direction = [...nextDirection];
+        const head = [snake[0][0]+direction[0], snake[0][1]+direction[1]];
+        if (head[0]<0||head[0]>=GRID_SIZE||head[1]<0||head[1]>=GRID_SIZE) { endGame(); return; }
+        if (snake.some(s=>s[0]===head[0]&&s[1]===head[1])) { endGame(); return; }
+        snake.unshift(head);
+        if (head[0]===food[0]&&head[1]===food[1]) {
+            score++;
+            generateFood();
+            window.GameHub.playSound('eat');
+        } else {
+            snake.pop();
+        }
+        render();
+    }
+
+    function endGame() {
+        gameOver = true;
+        clearInterval(interval);
+        if (score > highScore) {
+            highScore = score;
+            localStorage.setItem('snakeHighScore', highScore);
+            document.getElementById('high-score').textContent = highScore;
+        }
+        document.getElementById('final-score').textContent = score;
+        document.getElementById('snake-overlay').classList.remove('hidden');
+        window.GameHub.playSound('lose');
+    }
+
+    function resetSnake() {
+        snake = INITIAL_SNAKE.map(p=>[...p]);
+        direction = [...INITIAL_DIR];
+        nextDirection = [...INITIAL_DIR];
+        score = 0;
+        gameOver = false;
+        paused = false;
+        generateFood();
+        document.getElementById('snake-overlay').classList.add('hidden');
+        render();
+        clearInterval(interval);
+        interval = setInterval(step, SPEED);
+    }
+
+    function setDirection(dx, dy) {
+        if (dx===0&&dy===0) return;
+        if (direction[0]===-dx&&direction[1]===-dy) return;
+        nextDirection = [dx, dy];
+    }
+
+    function togglePause() {
+        if (gameOver) return;
+        paused = !paused;
+    }
+
+    document.addEventListener('keydown', e => {
+        switch(e.key) {
+            case 'ArrowUp': if(direction[1]!==1) nextDirection=[0,-1]; break;
+            case 'ArrowDown': if(direction[1]!==-1) nextDirection=[0,1]; break;
+            case 'ArrowLeft': if(direction[0]!==1) nextDirection=[-1,0]; break;
+            case 'ArrowRight': if(direction[0]!==-1) nextDirection=[1,0]; break;
+            case ' ': togglePause(); e.preventDefault(); break;
+        }
+    });
+
+    let touchX=0, touchY=0;
+    document.addEventListener('touchstart', e => { touchX=e.touches[0].clientX; touchY=e.touches[0].clientY; });
+    document.addEventListener('touchend', e => {
+        const dx=e.changedTouches[0].clientX-touchX;
+        const dy=e.changedTouches[0].clientY-touchY;
+        if(Math.abs(dx)>30&&Math.abs(dx)>Math.abs(dy)) setDirection(dx>0?1:-1,0);
+        else if(Math.abs(dy)>30) setDirection(0,dy>0?1:-1);
+    });
+
+    generateFood();
+    render();
+    interval = setInterval(step, SPEED);
+</script>
+{% endblock %}

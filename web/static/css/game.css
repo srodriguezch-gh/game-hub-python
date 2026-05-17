@@ -1,0 +1,72 @@
+/* Shared game CSS */
+
+body { font-family: 'Inter', sans-serif; }
+
+/* Game board base styles */
+.game-board {
+    border-collapse: collapse;
+    margin: 0 auto;
+}
+
+.game-board td {
+    width: 60px;
+    height: 60px;
+    text-align: center;
+    vertical-align: middle;
+    font-size: 2rem;
+    cursor: pointer;
+    user-select: none;
+}
+
+.game-board td:hover {
+    filter: brightness(0.95);
+}
+
+/* Chess board colors */
+.chess-light { background: #f0d9b5; }
+.chess-dark { background: #b58863; }
+.chess-light.selected { background: #829769; }
+.chess-dark.selected { background: #646f40; }
+.chess-light.last-move { background: #cdd26a; }
+.chess-dark.last-move { background: #abaa45; }
+
+/* Pieces */
+.piece { line-height: 1; }
+.piece.white { color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
+.piece.black { color: #1e293b; }
+
+/* Tic-tac-toe */
+.ttt-cell {
+    width: 80px;
+    height: 80px;
+    font-size: 2.5rem;
+    border: 2px solid #e2e8f0;
+    background: white;
+    transition: all 0.15s;
+}
+.ttt-cell:hover { background: #f8fafc; }
+.ttt-cell.taken { pointer-events: none; }
+.ttt-cell.winner { background: #dcfce7 !important; }
+
+/* Game info panel */
+.game-info {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    padding: 1rem;
+}
+
+/* Bump labels */
+.text-\[10px\] { font-size: 11px; }
+
+/* Mobile */
+@media (max-width: 640px) {
+    .game-board td { width: 44px; height: 44px; font-size: 1.5rem; }
+    .ttt-cell { width: 60px; height: 60px; font-size: 2rem; }
+    main { padding: 1rem 0.75rem !important; }
+}
+@media (max-width: 375px) {
+    .game-board td { width: 36px; height: 36px; font-size: 1.2rem; }
+    .ttt-cell { width: 50px; height: 50px; font-size: 1.5rem; }
+    main { padding: 0.5rem !important; }
+}

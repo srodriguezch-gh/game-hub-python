@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block title %}Tic-Tac-Toe — Game Hub{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto text-center">
+    <h1 class="text-xl font-bold text-slate-800 mb-2">⭕ Tic-Tac-Toe</h1>
+    <p class="text-sm text-slate-500 mb-4" id="ttt-status">X's turn</p>
+
+    <!-- Tic-Tac-Toe board -->
+    <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-6 inline-block">
+        <div id="ttt-board" class="grid grid-cols-3 gap-1"></div>
+        <div class="mt-4 flex justify-center gap-3">
+            <button onclick="resetTtt()" class="px-4 py-2 bg-slate-200 rounded hover:bg-slate-300 text-sm">
+                <i class="fas fa-redo mr-1"></i>New Game
+            </button>
+        </div>
+    </div>
+
+    <!-- Result -->
+    <div id="ttt-result" class="mt-4 text-lg font-bold text-slate-800 hidden"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let board = Array(9).fill('');
+    let currentPlayer = 'X';
+    let gameOver = false;
+    let roomId = null;
+    const winLines = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+
+    function renderTtt() {
+        const boardEl = document.getElementById('ttt-board');
+        boardEl.innerHTML = board.map((cell, i) => `
+            <button
+                class="ttt-cell ${cell ? 'taken' : ''} ${cell === 'X' ? 'text-blue-600' : cell === 'O' ? 'text-red-600' : ''}"
+                data-cell="${i}"
+                onclick="handleTttClick(${i})"
+                ${cell || gameOver ? 'disabled' : ''}
+            >${cell}</button>
+        `).join('');
+        document.getElementById('ttt-status').textContent = gameOver ? '' : `${currentPlayer}'s turn`;
+    }
+
+    function handleTttClick(idx) {
+        if (board[idx] || gameOver) return;
+        board[idx] = currentPlayer;
+        renderTtt();
+
+        const winner = checkWinner();
+        if (winner) {
+            gameOver = true;
+            document.getElementById('ttt-result').textContent = `${winner} wins!`;
+            document.getElementById('ttt-result').classList.remove('hidden');
+            highlightWin(winner);
+            socket.emit("gameEnd", { winner, loser: currentPlayer === winner ? null : currentPlayer, game: "tictactoe" });
+            return;
+        }
+        if (!board.includes('')) {
+            gameOver = true;
+            document.getElementById('ttt-result').textContent = "Draw!";
+            document.getElementById('ttt-result').classList.remove('hidden');
+            return;
+        }
+        currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
+
+        if (roomId) {
+            socket.emit("makeMove", { roomId, move: idx, nextState: board, game: "tictactoe" });
+        }
+    }
+
+    function checkWinner() {
+        for (const [a,b,c] of winLines) {
+            if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+                return board[a];
+            }
+        }
+        return null;
+    }
+
+    function highlightWin(winner) {
+        for (const [a,b,c] of winLines) {
+            if (board[a] === winner && board[a] === board[b] && board[a] === board[c]) {
+                document.querySelectorAll('[data-cell]')[a].classList.add('winner');
+                document.querySelectorAll('[data-cell]')[b].classList.add('winner');
+                document.querySelectorAll('[data-cell]')[c].classList.add('winner');
+            }
+        }
+    }
+
+    function resetTtt() {
+        board = Array(9).fill('');
+        currentPlayer = 'X';
+        gameOver = false;
+        document.getElementById('ttt-result').classList.add('hidden');
+        renderTtt();
+    }
+
+    socket.on("moveMade", (data) => {
+        if (data.nextState) {
+            board = data.nextState;
+            const winner = checkWinner();
+            if (winner) {
+                gameOver = true;
+                document.getElementById('ttt-result').textContent = `${winner} wins!`;
+                document.getElementById('ttt-result').classList.remove('hidden');
+                highlightWin(winner);
+            } else if (!board.includes('')) {
+                gameOver = true;
+                document.getElementById('ttt-result').textContent = "Draw!";
+                document.getElementById('ttt-result').classList.remove('hidden');
+            }
+            currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
+        }
+        renderTtt();
+    });
+
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get("room")) {
+        roomId = urlParams.get("room");
+    } else {
+        roomId = `ttt_solo_${Date.now()}`;
+    }
+
+    renderTtt();
+</script>
+{% endblock %}

@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block title %}Task Hub — Game Hub{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Child selector -->
+    <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+        <h2 class="text-lg font-semibold text-slate-800 mb-4">
+            <i class="fas fa-tasks mr-2"></i>Task Hub
+        </h2>
+        <div class="flex gap-3 flex-wrap" id="child-tabs">
+            {% for child in ["Emma", "Mateo"] %}
+            <button onclick="switchChild('{{ child }}')" class="child-tab px-4 py-2 rounded-lg border border-slate-200 hover:border-blue-400 text-sm font-medium" data-child="{{ child }}">
+                {{ child }}
+            </button>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Tasks List -->
+    <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="font-semibold text-slate-700">Tasks</h3>
+            <button onclick="showAddTask()" class="px-3 py-1 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                + Add Task
+            </button>
+        </div>
+        <div id="tasks-list" hx-get="/api/tasks/{{ current_child|default('Emma') }}" hx-trigger="load, every 30s" hx-swap="innerHTML">
+            <p class="text-slate-400 text-sm">Loading tasks...</p>
+        </div>
+    </div>
+
+    <!-- Add Task Form (hidden) -->
+    <div id="add-task-form" class="hidden bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+        <h3 class="font-semibold text-slate-700 mb-4">New Task</h3>
+        <form onsubmit="submitTask(event)">
+            <input type="hidden" id="task-child" value="Emma" />
+            <div class="space-y-3">
+                <input type="text" id="task-desc" placeholder="Task description" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm" required maxlength="500" />
+                <div class="flex gap-3">
+                    <input type="number" id="task-points" value="1" min="1" max="100" class="w-24 px-3 py-2 rounded-lg border border-slate-200 text-sm" />
+                    <label class="flex items-center gap-2 text-sm">
+                        <input type="checkbox" id="task-recurring" class="rounded" />
+                        Recurring (daily)
+                    </label>
+                </div>
+                <div class="flex gap-2">
+                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">Save Task</button>
+                    <button type="button" onclick="hideAddTask()" class="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 text-sm">Cancel</button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- PIN Modal for Approvals -->
+    <div id="pin-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-800/50">
+        <div class="bg-white rounded-xl p-6 shadow-xl max-w-sm w-full mx-4">
+            <h3 class="font-semibold text-slate-800 mb-3">Enter PIN to Approve</h3>
+            <input type="password" id="approval-pin" maxlength="4" placeholder="4-digit PIN" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-center text-2xl tracking-widest mb-4" />
+            <input type="hidden" id="approval-task-id" value="" />
+            <div class="flex gap-2 justify-end">
+                <button onclick="closePinModal()" class="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 text-sm">Cancel</button>
+                <button onclick="submitApproval()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">Approve</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let currentChild = "Emma";
+
+    function switchChild(child) {
+        currentChild = child;
+        document.getElementById("task-child").value = child;
+        document.querySelectorAll(".child-tab").forEach(t => t.classList.remove("border-blue-400", "bg-blue-50"));
+        document.querySelector(`.child-tab[data-child="${child}"]`).classList.add("border-blue-400", "bg-blue-50");
+        loadTasks(child);
+    }
+
+    async function loadTasks(child) {
+        const res = await fetch(`/api/tasks/${child}`);
+        if (!res.ok) return;
+        const tasks = await res.json();
+        const list = document.getElementById("tasks-list");
+        if (!tasks.length) {
+            list.innerHTML = '<p class="text-slate-400 text-sm">No tasks yet</p>';
+            return;
+        }
+        list.innerHTML = tasks.map(t => `
+            <div class="flex items-center justify-between py-3 border-b border-slate-50">
+                <div>
+                    <div class="font-medium text-slate-800 ${t.is_completed ? 'line-through text-slate-400' : ''}">${t.task_description}</div>
+                    <div class="text-xs text-slate-500">${t.points} pts${t.is_recurring ? ` · ${t.series_count}/${t.series_total}` : ''}</div>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="toggleTask(${t.id}, ${!t.is_completed})" class="px-3 py-1 text-xs rounded ${t.is_completed ? 'bg-slate-100 text-slate-600' : 'bg-green-100 text-green-700'}">${t.is_completed ? 'Undo' : 'Done'}</button>
+                    ${t.is_completed && !t.is_approved ? `<button onclick="requestApproval(${t.id})" class="px-3 py-1 text-xs rounded bg-blue-100 text-blue-700">Approve</button>` : ''}
+                    ${t.is_approved ? '<span class="px-3 py-1 text-xs text-emerald-600"><i class="fas fa-check"></i></span>' : ''}
+                    <button onclick="deleteTask(${t.id})" class="px-3 py-1 text-xs rounded bg-red-50 text-red-600">Delete</button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function showAddTask() { document.getElementById("add-task-form").classList.remove("hidden"); }
+    function hideAddTask() { document.getElementById("add-task-form").classList.add("hidden"); }
+
+    async function submitTask(e) {
+        e.preventDefault();
+        const desc = document.getElementById("task-desc").value;
+        const points = parseInt(document.getElementById("task-points").value);
+        const recurring = document.getElementById("task-recurring").checked;
+        await fetch("/api/tasks", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ child_name: currentChild, task_description: desc, points, is_recurring: recurring, series_total: recurring ? 7 : 1 })
+        });
+        hideAddTask();
+        loadTasks(currentChild);
+    }
+
+    async function toggleTask(id, is_completed) {
+        await fetch(`/api/tasks/${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ is_completed })
+        });
+        loadTasks(currentChild);
+    }
+
+    function requestApproval(taskId) {
+        document.getElementById("approval-task-id").value = taskId;
+        document.getElementById("approval-pin").value = "";
+        document.getElementById("pin-modal").classList.remove("hidden");
+        document.getElementById("approval-pin").focus();
+    }
+
+    function closePinModal() {
+        document.getElementById("pin-modal").classList.add("hidden");
+    }
+
+    async function submitApproval() {
+        const taskId = document.getElementById("approval-task-id").value;
+        const pin = document.getElementById("approval-pin").value;
+        if (pin.length !== 4) {
+            alert("PIN must be 4 digits");
+            return;
+        }
+        const res = await fetch(`/api/tasks/${taskId}/approve`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ approved: true, pin })
+        });
+        closePinModal();
+        if (res.ok) {
+            loadTasks(currentChild);
+        } else {
+            const err = await res.json();
+            alert("Approval failed: " + (err.detail || "check PIN"));
+        }
+    }
+
+    async function deleteTask(id) {
+        await fetch(`/api/tasks/${id}`, { method: "DELETE" });
+        loadTasks(currentChild);
+    }
+
+    switchChild("Emma");
+</script>
+{% endblock %}
