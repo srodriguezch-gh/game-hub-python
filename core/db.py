@@ -2,17 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import (
-    Boolean,
-    Column,
-    DateTime,
-    Integer,
-    Numeric,
-    String,
-    Text,
-    JSON,
-    Index,
-)
+from sqlalchemy import Boolean, Column, DateTime, Index, Integer, JSON, Numeric, String, Text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -28,6 +18,8 @@ Base = declarative_base()
 
 
 class Player(Base):
+    """Stored player profile and win counters."""
+
     __tablename__ = "players"
 
     name = Column(String(100), primary_key=True)
@@ -36,9 +28,22 @@ class Player(Base):
     losses = Column(Integer, default=0)
     game_wins = Column(JSON, default=dict)
     selfie = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Wallet(Base):
+    """Current balance for a player."""
+
+    __tablename__ = "wallets"
+
+    player_name = Column(String(100), primary_key=True)
+    balance = Column(Numeric, default=0)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class Task(Base):
+    """Child task/reward entry."""
+
     __tablename__ = "tasks"
 
     id = Column(Integer, primary_key=True)
@@ -56,15 +61,21 @@ class Task(Base):
 
 
 class Transaction(Base):
+    """Ledger entry for earned or spent funds."""
+
     __tablename__ = "transactions"
 
     id = Column(Integer, primary_key=True)
     child_name = Column(String(100), nullable=False)
     amount = Column(Numeric, nullable=False)
     description = Column(Text, nullable=True)
+    kind = Column(String(20), default="earn")
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class PlayerCollection(Base):
+    """Per-player game-specific stored state."""
+
     __tablename__ = "player_collections"
 
     id = Column(Integer, primary_key=True)
@@ -79,6 +90,8 @@ class PlayerCollection(Base):
 
 
 class Achievement(Base):
+    """External platform achievement record."""
+
     __tablename__ = "achievements"
 
     id = Column(Integer, primary_key=True)
@@ -94,7 +107,7 @@ class Achievement(Base):
     )
 
 
-async def init_db():
+async def init_db() -> None:
     """Create all tables if they don't exist."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

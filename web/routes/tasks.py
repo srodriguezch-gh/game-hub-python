@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.db import Task, Transaction, Player, get_session
+from core.db import Task, Transaction, Player, Wallet, get_session
 
 router = APIRouter(prefix="/api", tags=["tasks"])
 
@@ -39,6 +39,15 @@ class TransactionCreate(BaseModel):
 
 
 VALID_CHILDREN = {"Emma", "Mateo", "Dad"}
+
+
+async def _get_or_create_wallet(session: AsyncSession, child: str) -> Wallet:
+    wallet = await session.get(Wallet, child)
+    if wallet is None:
+        wallet = Wallet(player_name=child, balance=0)
+        session.add(wallet)
+        await session.flush()
+    return wallet
 
 
 @router.get("/tasks/{child}")
@@ -114,6 +123,16 @@ async def approve_task(task_id: int, data: ApproveRequest, session: AsyncSession
     task.is_approved = data.approved
     if data.approved:
         task.is_completed = True
+
+        wallet = await _get_or_create_wallet(session, task.child_name)
+        wallet.balance = (wallet.balance or 0) + task.points
+        session.add(Transaction(
+            child_name=task.child_name,
+            amount=task.points,
+            description=f"Approved task: {task.task_description}",
+            kind="earn",
+        ))
+
     await session.commit()
     await session.refresh(task)
     return task
@@ -139,10 +158,13 @@ async def get_transactions(child: str, session: AsyncSession = Depends(get_sessi
 
 @router.post("/transactions")
 async def create_transaction(data: TransactionCreate, session: AsyncSession = Depends(get_session)):
+    wallet = await _get_or_create_wallet(session, data.child_name)
+    wallet.balance = (wallet.balance or 0) + data.amount
     tx = Transaction(
         child_name=data.child_name,
         amount=data.amount,
         description=data.description,
+        kind="earn" if data.amount >= 0 else "spend",
     )
     session.add(tx)
     await session.commit()
@@ -159,9 +181,6 @@ async def payout(child: str, session: AsyncSession = Depends(get_session)):
             Task.is_approved == True,
             Task.is_paid == False,
         ).values(is_paid=True)
-    )
-    await session.execute(
-        update(Transaction).where(Transaction.child_name == child).delete()
     )
     await session.commit()
     return {"success": True}

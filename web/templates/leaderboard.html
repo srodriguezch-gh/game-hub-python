@@ -22,11 +22,12 @@
                     <th class="pb-3 font-medium">Player</th>
                     <th class="pb-3 font-medium text-center">Wins</th>
                     <th class="pb-3 font-medium text-center">Losses</th>
+                    <th class="pb-3 font-medium text-center">Wallet</th>
                     <th class="pb-3 font-medium text-center">Total</th>
                 </tr>
             </thead>
             <tbody id="leaderboard-tbody">
-                <tr><td colspan="5" class="py-4 text-slate-400 text-center">Loading...</td></tr>
+                <tr><td colspan="6" class="py-4 text-slate-400 text-center">Loading...</td></tr>
             </tbody>
         </table>
     </div>
@@ -51,6 +52,7 @@
                 <td class="py-3 font-medium text-slate-800">${p.name}</td>
                 <td class="py-3 text-center text-green-600 font-medium">${p.wins}</td>
                 <td class="py-3 text-center text-red-500">${p.losses}</td>
+                <td class="py-3 text-center text-emerald-600 font-medium">$${(p.balance || 0).toFixed(2)}</td>
                 <td class="py-3 text-center text-slate-600">${p.wins + p.losses}</td>
             </tr>
         `).join('');

@@ -1,4 +1,4 @@
-"""In-memory game state manager for active game sessions."""
+"""In-memory state for active game sessions and online players."""
 
 import asyncio
 import logging
@@ -22,6 +22,8 @@ class ChessGameInstance(GameInstance):
 
 
 class GameManager:
+    """Owns ephemeral room state, online users, and rate limits."""
+
     def __init__(self):
         self.games: dict[str, GameInstance] = {}
         self.online_users: dict[str, str] = {}
@@ -30,6 +32,7 @@ class GameManager:
         self._rate_limit_cleanup_task: asyncio.Task | None = None
 
     def cleanup(self):
+        """Start background cleanup tasks when an event loop is available."""
         if self._cleanup_task is None:
             try:
                 loop = asyncio.get_running_loop()
@@ -89,6 +92,7 @@ class GameManager:
         return True
 
     def get_or_create_chess(self, room_id: str) -> ChessGameInstance:
+        """Get the chess session for a room, or create a fresh one."""
         if room_id not in self.games:
             self.games[room_id] = ChessGameInstance(room_id=room_id)
         elif not isinstance(self.games[room_id], ChessGameInstance):
@@ -98,10 +102,12 @@ class GameManager:
         return game
 
     def update_chess_fen(self, room_id: str, fen: str):
+        """Persist the latest FEN for a chess room."""
         game = self.get_or_create_chess(room_id)
         game.fen = fen
 
     def reset_chess(self, room_id: str):
+        """Reset a chess room to the starting position."""
         if room_id in self.games:
             self.games[room_id] = ChessGameInstance(room_id=room_id)
 

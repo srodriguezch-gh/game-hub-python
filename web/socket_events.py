@@ -39,6 +39,8 @@ async def _get_players_map() -> dict:
 
 
 def register_events(sio: socketio.AsyncServer):
+    """Register Socket.IO event handlers."""
+
     @sio.event
     async def connect(sid, environ):
         logger.info(f"Client connected: {sid}")
@@ -47,16 +49,16 @@ def register_events(sio: socketio.AsyncServer):
     async def disconnect(sid):
         player_name = game_manager.remove_online(sid)
         logger.info(f"Client disconnected: {sid} ({player_name})")
-        await sio.emit("updateOnlineStatus", game_manager.get_online_status() + ["Calypso"])
+        await sio.emit("updateOnlineStatus", game_manager.get_online_status())
 
     @sio.event
     async def login(sid, player_name: str):
         game_manager.set_online(sid, player_name)
-        await sio.emit("updateOnlineStatus", game_manager.get_online_status() + ["Calypso"])
+        await sio.emit("updateOnlineStatus", game_manager.get_online_status())
 
     @sio.event
     async def getOnlineUsers(sid):
-        await sio.emit("onlineUsersResult", game_manager.get_online_status() + ["Calypso"])
+        await sio.emit("onlineUsersResult", game_manager.get_online_status())
 
     @sio.event
     async def getPlayers(sid):
@@ -93,7 +95,7 @@ def register_events(sio: socketio.AsyncServer):
 
     @sio.event
     async def makeMove(sid, data: dict):
-        """Route-only makeMove: broadcast to room without game-specific logic."""
+        """Broadcast the move and trigger server-side chess AI when needed."""
         room_id = data.get("roomId")
         move = data.get("move")
         move_type = data.get("type")
@@ -113,11 +115,10 @@ def register_events(sio: socketio.AsyncServer):
             "nextState": data.get("nextState"),
         }, room=room_id)
 
-        # Chess AI response via bot_service
+        # Chess AI response via bot_service.
         if game_type == "chess" and ("solo" in room_id or "Calypso" in room_id or "Traka" in room_id):
             fen = data.get("fen")
             if fen:
-                # Determine which bot is opponent from room_id
                 bot_name = "Calypso" if "Calypso" in room_id else "Traka"
                 await bot_service.request_chess_move(bot_name, fen, lambda result: _handle_ai_response(room_id, result))
 
@@ -126,6 +127,7 @@ def register_events(sio: socketio.AsyncServer):
             return
         try:
             import chess
+
             ai_move_str = f"{result['from']}{result['to']}"
             game_obj = game_manager.get_game(room_id)
             if game_obj and hasattr(game_obj, 'fen'):
@@ -134,6 +136,8 @@ def register_events(sio: socketio.AsyncServer):
                 if mv in board.legal_moves:
                     board.push(mv)
                     game_manager.update_chess_fen(room_id, board.fen())
+                else:
+                    return
             await sio.emit("moveMade", {"move": ai_move_str, "fen": board.fen()}, room=room_id)
         except Exception as e:
             logger.error(f"AI move error: {e}")
